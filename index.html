@@ -75,6 +75,9 @@
     padding: 14px;
     margin-bottom: 10px;
     transition: opacity .2s;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
   li.dragging {
     opacity: .9;
@@ -115,6 +118,31 @@
   .handle:active { cursor: grabbing; }
 
   .empty { text-align: center; color: var(--sub); padding: 40px 0; font-size: 14px; }
+
+  /* 削除確認ダイアログ */
+  .backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    align-items: center; justify-content: center;
+    padding: 24px; z-index: 10;
+  }
+  .backdrop.show { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 22px;
+    width: 100%; max-width: 320px;
+    text-align: center;
+  }
+  .modal-text { font-size: 16px; font-weight: 500; margin-bottom: 18px; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button {
+    flex: 1; border: none; border-radius: 12px;
+    padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .btn-cancel { background: var(--line); color: var(--text); }
+  .btn-del { background: var(--danger); color: #fff; }
 </style>
 
 <header>
@@ -135,6 +163,16 @@
 
 <ul id="list"></ul>
 <div class="empty" id="empty">習慣を追加して、毎日の積み重ねを始めましょう。</div>
+
+<div class="backdrop" id="backdrop">
+  <div class="modal">
+    <div class="modal-text" id="modal-text"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="modal-cancel">キャンセル</button>
+      <button class="btn-del" id="modal-ok">削除</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const KEY = 'habit-routine-v1';
@@ -181,12 +219,17 @@ function add() {
   save(); render();
 }
 
+let pendingDelId = null;
 function del(id) {
   const h = habits.find(x => x.id === id);
   if (!h) return;
-  if (!confirm(`「${h.name}」を削除しますか？`)) return;
-  habits = habits.filter(x => x.id !== id);
-  save(); render();
+  pendingDelId = id;
+  document.getElementById('modal-text').textContent = `「${h.name}」を削除しますか？`;
+  document.getElementById('backdrop').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('backdrop').classList.remove('show');
+  pendingDelId = null;
 }
 
 // 連続が途切れた習慣のstreakを表示前に補正
@@ -292,6 +335,12 @@ document.getElementById('date').textContent =
   new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'long' });
 document.getElementById('addBtn').onclick = add;
 document.getElementById('input').addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+document.getElementById('modal-cancel').onclick = closeModal;
+document.getElementById('modal-ok').onclick = () => {
+  habits = habits.filter(x => x.id !== pendingDelId);
+  save(); closeModal(); render();
+};
+document.getElementById('backdrop').onclick = e => { if (e.target.id === 'backdrop') closeModal(); };
 
 render();
 </script>
