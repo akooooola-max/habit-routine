@@ -76,6 +76,11 @@
     margin-bottom: 10px;
     transition: opacity .2s;
   }
+  li.dragging {
+    opacity: .9;
+    box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    transform: scale(1.02);
+  }
   .check {
     width: 30px; height: 30px;
     border-radius: 50%;
@@ -97,6 +102,16 @@
     font-size: 18px; cursor: pointer; padding: 4px 6px; flex-shrink: 0;
   }
   .del:hover { color: var(--danger); }
+  .handle {
+    flex-shrink: 0;
+    color: var(--sub);
+    font-size: 20px;
+    padding: 4px 2px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .handle:active { cursor: grabbing; }
 
   .empty { text-align: center; color: var(--sub); padding: 40px 0; font-size: 14px; }
 </style>
@@ -178,6 +193,43 @@ function refreshStreaks() {
   });
 }
 
+// ドラッグ並べ替え（タッチ・マウス両対応）
+function startDrag(e, li) {
+  e.preventDefault();
+  const list = document.getElementById('list');
+  li.classList.add('dragging');
+  const handle = e.currentTarget;
+  handle.setPointerCapture(e.pointerId);
+
+  const move = ev => {
+    const after = afterElement(list, ev.clientY);
+    if (after == null) list.appendChild(li);
+    else list.insertBefore(li, after);
+  };
+  const up = () => {
+    handle.releasePointerCapture(e.pointerId);
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', up);
+    li.classList.remove('dragging');
+    // DOMの並び順を配列に反映して保存
+    const ids = [...list.children].map(el => Number(el.dataset.id));
+    habits.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    save(); render();
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', up);
+}
+
+function afterElement(list, y) {
+  const els = [...list.querySelectorAll('li:not(.dragging)')];
+  return els.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: -Infinity }).element;
+}
+
 function render() {
   refreshStreaks();
   const list = document.getElementById('list');
@@ -186,16 +238,19 @@ function render() {
     const done = isDoneToday(h);
     const li = document.createElement('li');
     if (done) li.className = 'done';
+    li.dataset.id = h.id;
     li.innerHTML = `
       <div class="check">${done ? '✓' : ''}</div>
       <div class="body">
         <div class="name"></div>
         <div class="streak ${h.streak >= 3 ? 'hot' : ''}">${h.streak > 0 ? '🔥 ' + h.streak + '日連続' : 'これから'}</div>
       </div>
-      <button class="del">✕</button>`;
+      <button class="del">✕</button>
+      <div class="handle" title="ドラッグして並べ替え">≡</div>`;
     li.querySelector('.name').textContent = h.name;
     li.querySelector('.check').onclick = () => toggle(h.id);
     li.querySelector('.del').onclick = () => del(h.id);
+    li.querySelector('.handle').addEventListener('pointerdown', e => startDrag(e, li));
     list.appendChild(li);
   });
 
