@@ -181,6 +181,9 @@ function add() {
 }
 
 function del(id) {
+  const h = habits.find(x => x.id === id);
+  if (!h) return;
+  if (!confirm(`「${h.name}」を削除しますか？`)) return;
   habits = habits.filter(x => x.id !== id);
   save(); render();
 }
