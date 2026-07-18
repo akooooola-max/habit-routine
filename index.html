@@ -80,6 +80,7 @@
     opacity: .9;
     box-shadow: 0 8px 24px rgba(0,0,0,.15);
     transform: scale(1.02);
+    touch-action: none;
   }
   .check {
     width: 30px; height: 30px;
@@ -105,8 +106,8 @@
   .handle {
     flex-shrink: 0;
     color: var(--sub);
-    font-size: 20px;
-    padding: 4px 2px;
+    font-size: 22px;
+    padding: 8px 6px;
     cursor: grab;
     touch-action: none;
     user-select: none;
@@ -197,30 +198,52 @@ function refreshStreaks() {
 }
 
 // ドラッグ並べ替え（タッチ・マウス両対応）
-function startDrag(e, li) {
-  e.preventDefault();
+// ・≡ハンドル → すぐ移動開始
+// ・行を長押し → どこを掴んでも移動開始
+function attachDrag(li) {
+  li.querySelector('.handle').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    beginDrag(li);
+  });
+
+  let holdTimer = null, startY = 0;
+  const cancelHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } };
+  li.addEventListener('pointerdown', e => {
+    if (e.target.closest('.check, .del, .handle')) return; // タップ操作は邪魔しない
+    startY = e.clientY;
+    holdTimer = setTimeout(() => { holdTimer = null; beginDrag(li); }, 250);
+  });
+  li.addEventListener('pointermove', e => {
+    if (holdTimer && Math.abs(e.clientY - startY) > 8) cancelHold(); // スクロールならキャンセル
+  });
+  li.addEventListener('pointerup', cancelHold);
+  li.addEventListener('pointercancel', cancelHold);
+}
+
+function beginDrag(li) {
   const list = document.getElementById('list');
   li.classList.add('dragging');
-  const handle = e.currentTarget;
-  handle.setPointerCapture(e.pointerId);
 
   const move = ev => {
-    const after = afterElement(list, ev.clientY);
+    ev.preventDefault();
+    const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    const after = afterElement(list, y);
     if (after == null) list.appendChild(li);
     else list.insertBefore(li, after);
   };
   const up = () => {
-    handle.releasePointerCapture(e.pointerId);
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', up);
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
     li.classList.remove('dragging');
     // DOMの並び順を配列に反映して保存
     const ids = [...list.children].map(el => Number(el.dataset.id));
     habits.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
     save(); render();
   };
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', up);
+  document.addEventListener('pointermove', move, { passive: false });
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
 }
 
 function afterElement(list, y) {
@@ -253,7 +276,7 @@ function render() {
     li.querySelector('.name').textContent = h.name;
     li.querySelector('.check').onclick = () => toggle(h.id);
     li.querySelector('.del').onclick = () => del(h.id);
-    li.querySelector('.handle').addEventListener('pointerdown', e => startDrag(e, li));
+    attachDrag(li);
     list.appendChild(li);
   });
 
